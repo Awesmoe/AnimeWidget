@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.layout.fillMaxWidth
+import getUseEnglishTitle
+import getUsername
+import kotlinx.coroutines.flow.firstOrNull
 
 import java.time.Instant
 import java.time.ZoneId
@@ -44,7 +47,9 @@ class AnimeWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val username = "Awesmoe"  // Replace with your username
+        val usernameFlow = getUsername(context)
+        val username = usernameFlow.firstOrNull() ?: return
+        val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
 
         val malFetcher = MalFetcher()
         val aniListFetcher = AniListFetcher()
@@ -78,13 +83,13 @@ Log.d("MalFetcher","status 1 or 3: ${animeWithSchedules.size}")
 
         provideContent {
             GlanceTheme {
-                WidgetContent(sortedAnime)
+                WidgetContent(sortedAnime, useEnglishTitle)
             }
         }
     }
 
     @Composable
-    private fun WidgetContent(animeList: List<AnimeWithSchedule>) {
+    private fun WidgetContent(animeList: List<AnimeWithSchedule>, useEnglishTitle: Boolean) {
         val scope = rememberCoroutineScope()
 
         if (animeList.isEmpty()) {
@@ -110,7 +115,11 @@ Log.d("MalFetcher","status 1 or 3: ${animeWithSchedules.size}")
             ) {
                 items(animeList.size) { index ->
                     val item = animeList[index]
-                    val title = item.anime.anime_title_eng ?: item.anime.anime_title
+                    val title = if (useEnglishTitle) {
+                        item.anime.anime_title_eng?.takeIf { it.isNotBlank() } ?: item.anime.anime_title
+                    } else {
+                        item.anime.anime_title
+                    }
                     val timeStr = formatTimeUntil(item.timeUntilAiring ?: 0)
 
                     Column(
