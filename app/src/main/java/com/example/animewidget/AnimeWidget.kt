@@ -42,49 +42,117 @@ class AnimeWidget : GlanceAppWidget() {
         setOf(
 //            DpSize(180.dp, 110.dp),
 //            DpSize(180.dp, 180.dp),
-            DpSize(120.dp, 200.dp)
+            DpSize(120.dp, 300.dp)
         )
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val usernameFlow = getUsername(context)
-        val username = usernameFlow.firstOrNull() ?: return
-        val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
+        val username = getUsername(context).firstOrNull()
 
-        val malFetcher = MalFetcher()
-        val aniListFetcher = AniListFetcher()
-
-        val animeList = malFetcher.getAnimeList(username)
-
-        // Fetch AniList data for each anime
-        val animeWithSchedules = animeList
-            .filter { anime ->
-                anime.anime_airing_status == 1 || anime.anime_airing_status == 3
-            }
-            .mapNotNull { anime ->
-                val schedule = aniListFetcher.getAiringSchedule(anime.anime_id)
-
-                // discard anime with no upcoming episode info if AniList says it's finished
-                if (anime.anime_airing_status == 1 && schedule == null) {
-                    null
-                } else {
-                    AnimeWithSchedule(
-                        anime = anime,
-                        episode = schedule?.episode,
-                        airingAt = schedule?.airingAt,
-                        timeUntilAiring = schedule?.timeUntilAiring
-                    )
+        if (username.isNullOrBlank()) {
+            provideContent {
+                GlanceTheme {
+                    SetupRequiredContent()
                 }
             }
+            return
+        }
 
-Log.d("MalFetcher","status 1 or 3: ${animeWithSchedules.size}")
-        // Sort by airing time (soonest first)
-        val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
+        try {
+            val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
+            val malFetcher = MalFetcher()
+            val aniListFetcher = AniListFetcher()
+            val animeList = malFetcher.getAnimeList(username)
 
-        provideContent {
-            GlanceTheme {
-                WidgetContent(sortedAnime, useEnglishTitle)
+            val animeWithSchedules = animeList
+                .filter { anime ->
+                    anime.anime_airing_status == 1 || anime.anime_airing_status == 3
+                }
+                .mapNotNull { anime ->
+                    val schedule = aniListFetcher.getAiringSchedule(anime.anime_id)
+                    if (anime.anime_airing_status == 1 && schedule == null) {
+                        null
+                    } else {
+                        AnimeWithSchedule(
+                            anime = anime,
+                            episode = schedule?.episode,
+                            airingAt = schedule?.airingAt,
+                            timeUntilAiring = schedule?.timeUntilAiring
+                        )
+                    }
+                }
+
+            val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
+
+            provideContent {
+                GlanceTheme {
+                    WidgetContent(sortedAnime, useEnglishTitle)
+                }
             }
+        } catch (e: Exception) {
+            Log.e("AnimeWidget", "Error loading widget data", e)
+            provideContent {
+                GlanceTheme {
+                    ErrorContent(e.message ?: "Unknown error")
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun LoadingContent() {
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Loading...",
+                style = TextStyle(color = GlanceTheme.colors.onSurface)
+            )
+        }
+    }
+
+    @Composable
+    private fun SetupRequiredContent() {
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Setup Required",
+                style = TextStyle(color = GlanceTheme.colors.onSurface)
+            )
+            Text(
+                text = "Open the app to configure",
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant)
+            )
+        }
+    }
+
+    @Composable
+    private fun ErrorContent(message: String) {
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Error",
+                style = TextStyle(color = GlanceTheme.colors.error)
+            )
+            Text(
+                text = message,
+                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant),
+                maxLines = 3
+            )
         }
     }
 

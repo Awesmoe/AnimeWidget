@@ -10,7 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import android.app.Activity
+import android.util.Log
 import androidx.compose.ui.Alignment
+import androidx.glance.appwidget.updateAll
 import getUseEnglishTitle
 import getUsername
 import kotlinx.coroutines.flow.firstOrNull
@@ -100,6 +102,16 @@ fun UsernameScreen() {
                     scope.launch {
                         saveUsername(context, username)
                         saveUseEnglishTitle(context, useEnglishTitle)
+
+                        // Force widget update with new data
+                        try {
+                            AnimeWidget().updateAll(context)
+                            Log.d("MainActivity", "Widget update triggered")
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Failed to update widget", e)
+                        }
+
+                        // close activity
                         (context as? Activity)?.finish()
                     }
                 },
@@ -107,6 +119,7 @@ fun UsernameScreen() {
             ) {
                 Text("Save")
             }
+
         }
     }
 }
