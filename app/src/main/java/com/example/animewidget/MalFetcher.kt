@@ -36,9 +36,10 @@ class MalFetcher {
         }
     }
 
-    private suspend fun fetchAnimeByStatus(username: String, status: Int): List<MalAnime> {
+    suspend fun fetchAnimeByStatus(username: String, status: Int): List<MalAnime> = withContext(Dispatchers.IO) {
         try {
             val url = "https://myanimelist.net/animelist/$username?status=$status"
+            Log.d("Fetcher", url)
             val request = Request.Builder()
                 .url(url)
                 .build()
@@ -49,10 +50,10 @@ class MalFetcher {
 
             if (!response.isSuccessful) {
                 Log.e("MalFetcher", "HTTP Error: ${response.code}")
-                return emptyList()
+                return@withContext emptyList()
             }
 
-            val html = response.body?.string() ?: return emptyList()
+            val html = response.body?.string() ?: return@withContext emptyList()
 
             Log.d("MalFetcher", "HTML length for status $status: ${html.length}")
 
@@ -62,24 +63,24 @@ class MalFetcher {
 
             if (listTable == null) {
                 Log.e("MalFetcher", "Could not find list table for status $status")
-                return emptyList()
+                return@withContext emptyList()
             }
 
             val dataItems = listTable.attr("data-items")
 
             if (dataItems.isEmpty()) {
                 Log.e("MalFetcher", "data-items attribute is empty for status $status")
-                return emptyList()
+                return@withContext emptyList()
             }
 
             // Parse JSON
             val animeList = json.decodeFromString<List<MalAnime>>(dataItems)
 
-            return animeList
+            return@withContext animeList
 
         } catch (e: Exception) {
             Log.e("MalFetcher", "Error fetching status $status", e)
-            return emptyList()
+            return@withContext emptyList()
         }
     }
 }

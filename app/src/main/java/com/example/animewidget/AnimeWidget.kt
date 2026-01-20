@@ -1,33 +1,29 @@
 package com.example.animewidget
 
-import android.util.Log
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.compose.ui.unit.DpSize
-import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.layout.fillMaxWidth
+import getIncludePlanToWatch
 import getUseEnglishTitle
 import getUsername
 import kotlinx.coroutines.flow.firstOrNull
-
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 data class AnimeWithSchedule(
     val anime: MalAnime,
@@ -36,17 +32,25 @@ data class AnimeWithSchedule(
     val timeUntilAiring: Int?
 )
 
+private sealed class ContentState {
+    data class Success(val animeList: List<AnimeWithSchedule>, val useEnglishTitle: Boolean) : ContentState()
+    data class Error(val message: String) : ContentState()
+}
+
 class AnimeWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Responsive(
+    override val sizeMode = SizeMode.Single
+/*    override val sizeMode = SizeMode.Responsive(
         setOf(
-//            DpSize(180.dp, 110.dp),
-//            DpSize(180.dp, 180.dp),
+            DpSize(180.dp, 110.dp),
+            DpSize(180.dp, 180.dp),
             DpSize(120.dp, 300.dp)
         )
     )
+ */
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+
         val username = getUsername(context).firstOrNull()
 
         if (username.isNullOrBlank()) {
@@ -58,42 +62,60 @@ class AnimeWidget : GlanceAppWidget() {
             return
         }
 
-        try {
+        val content = try {
             val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
+            val includePlanToWatch = getIncludePlanToWatch(context).firstOrNull() ?: true
             val malFetcher = MalFetcher()
             val aniListFetcher = AniListFetcher()
-            val animeList = malFetcher.getAnimeList(username)
 
-            val animeWithSchedules = animeList
-                .filter { anime ->
-                    anime.anime_airing_status == 1 || anime.anime_airing_status == 3
+            val animeList = if (includePlanToWatch) {
+                malFetcher.getAnimeList(username)
+            } else {
+                malFetcher.fetchAnimeByStatus(username, 1)
+            }
+
+            // Filter airing anime first
+            val airingAnime = animeList.filter { anime ->
+                anime.anime_airing_status == 1 || anime.anime_airing_status == 3
+            }
+
+            // Batch fetch all schedules at once
+            val malIds = airingAnime.map { it.anime_id }
+            val schedules = aniListFetcher.getMultipleAiringSchedules(malIds)
+
+            // Combine anime with their schedules
+            val animeWithSchedules = airingAnime.mapNotNull { anime ->
+                val schedule = schedules[anime.anime_id]
+                if (anime.anime_airing_status == 1 && schedule == null) {
+                    null
+                } else {
+                    AnimeWithSchedule(
+                        anime = anime,
+                        episode = schedule?.episode,
+                        airingAt = schedule?.airingAt,
+                        timeUntilAiring = schedule?.timeUntilAiring
+                    )
                 }
-                .mapNotNull { anime ->
-                    val schedule = aniListFetcher.getAiringSchedule(anime.anime_id)
-                    if (anime.anime_airing_status == 1 && schedule == null) {
-                        null
-                    } else {
-                        AnimeWithSchedule(
-                            anime = anime,
-                            episode = schedule?.episode,
-                            airingAt = schedule?.airingAt,
-                            timeUntilAiring = schedule?.timeUntilAiring
-                        )
-                    }
-                }
+            }
 
             val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
 
-            provideContent {
-                GlanceTheme {
-                    WidgetContent(sortedAnime, useEnglishTitle)
-                }
-            }
+            // Return success content
+            ContentState.Success(sortedAnime, useEnglishTitle)
+
         } catch (e: Exception) {
             Log.e("AnimeWidget", "Error loading widget data", e)
-            provideContent {
-                GlanceTheme {
-                    ErrorContent(e.message ?: "Unknown error")
+            e.printStackTrace()
+            // Return error content
+            ContentState.Error(e.message ?: "Unknown error")
+        }
+
+        // Single provideContent call based on state
+        provideContent {
+            GlanceTheme {
+                when (content) {
+                    is ContentState.Success -> WidgetContent(content.animeList, content.useEnglishTitle)
+                    is ContentState.Error -> ErrorContent(content.message)
                 }
             }
         }
@@ -158,7 +180,6 @@ class AnimeWidget : GlanceAppWidget() {
 
     @Composable
     private fun WidgetContent(animeList: List<AnimeWithSchedule>, useEnglishTitle: Boolean) {
-        val scope = rememberCoroutineScope()
 
         if (animeList.isEmpty()) {
             Column(
@@ -172,8 +193,6 @@ class AnimeWidget : GlanceAppWidget() {
                     text = "No airing anime",
                     style = TextStyle(color = GlanceTheme.colors.onSurface)
                 )
-                // optional refresh button
-//            RefreshButton(onClick = { scope.launch { update(context, id) } })
             }
         } else {
             LazyColumn(
@@ -181,8 +200,7 @@ class AnimeWidget : GlanceAppWidget() {
                     .fillMaxSize()
                     .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                items(animeList.size) { index ->
-                    val item = animeList[index]
+                items(animeList) { item ->
                     val title = if (useEnglishTitle) {
                         item.anime.anime_title_eng?.takeIf { it.isNotBlank() } ?: item.anime.anime_title
                     } else {
@@ -196,7 +214,7 @@ class AnimeWidget : GlanceAppWidget() {
                             .padding(bottom = 8.dp)
                     ) {
                         Text(
-                            text = title ?: "Untitled",
+                            text = title,
                             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant),
                             maxLines = 1
                         )

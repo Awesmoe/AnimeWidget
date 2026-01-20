@@ -1,7 +1,6 @@
 package com.example.animewidget
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
 
 @Serializable
 data class MalAnime(
@@ -28,7 +27,7 @@ data class AniListMediaSimple(
     val id: Int? = null,
     val title: AniListTitle? = null,
     val nextAiringEpisode: AiringNode? = null,
-    val airingSchedule: AiringSchedule? = null,  // Add this
+    val airingSchedule: AiringSchedule? = null,
     val status: String? = null
 )
 
