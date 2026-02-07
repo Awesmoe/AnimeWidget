@@ -3,6 +3,7 @@ package com.example.animewidget
 import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -24,6 +25,10 @@ import getIncludePlanToWatch
 import getUseEnglishTitle
 import getUsername
 import kotlinx.coroutines.flow.firstOrNull
+import androidx.glance.appwidget.action.actionStartActivity
+import android.content.Intent
+import androidx.core.net.toUri
+import androidx.glance.action.clickable
 
 data class AnimeWithSchedule(
     val anime: MalAnime,
@@ -33,21 +38,25 @@ data class AnimeWithSchedule(
 )
 
 private sealed class ContentState {
-    data class Success(val animeList: List<AnimeWithSchedule>, val useEnglishTitle: Boolean) : ContentState()
+    data class Success(
+        val animeList: List<AnimeWithSchedule>,
+        val useEnglishTitle: Boolean,
+        val hasMoeList: Boolean  // Add this
+    ) : ContentState()
     data class Error(val message: String) : ContentState()
 }
 
 class AnimeWidget : GlanceAppWidget() {
 
-    override val sizeMode = SizeMode.Single
-/*    override val sizeMode = SizeMode.Responsive(
+ //   override val sizeMode = SizeMode.Single
+    override val sizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(180.dp, 110.dp),
-            DpSize(180.dp, 180.dp),
+            DpSize(120.dp, 120.dp),
+            DpSize(120.dp, 240.dp),
             DpSize(120.dp, 300.dp)
         )
     )
- */
+
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
 
@@ -61,6 +70,8 @@ class AnimeWidget : GlanceAppWidget() {
             }
             return
         }
+
+        val hasMoeList = isMoeListInstalled(context)
 
         val content = try {
             val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
@@ -101,7 +112,7 @@ class AnimeWidget : GlanceAppWidget() {
             val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
 
             // Return success content
-            ContentState.Success(sortedAnime, useEnglishTitle)
+            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)
 
         } catch (e: Exception) {
             Log.e("AnimeWidget", "Error loading widget data", e)
@@ -114,26 +125,10 @@ class AnimeWidget : GlanceAppWidget() {
         provideContent {
             GlanceTheme {
                 when (content) {
-                    is ContentState.Success -> WidgetContent(content.animeList, content.useEnglishTitle)
+                    is ContentState.Success -> WidgetContent(content.animeList, content.useEnglishTitle, content.hasMoeList)
                     is ContentState.Error -> ErrorContent(content.message)
                 }
             }
-        }
-    }
-
-    @Composable
-    private fun LoadingContent() {
-        Column(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Loading...",
-                style = TextStyle(color = GlanceTheme.colors.onSurface)
-            )
         }
     }
 
@@ -179,7 +174,7 @@ class AnimeWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun WidgetContent(animeList: List<AnimeWithSchedule>, useEnglishTitle: Boolean) {
+    private fun WidgetContent(animeList: List<AnimeWithSchedule>, useEnglishTitle: Boolean, hasMoeList: Boolean) {
 
         if (animeList.isEmpty()) {
             Column(
@@ -208,10 +203,17 @@ class AnimeWidget : GlanceAppWidget() {
                     }
                     val timeStr = formatTimeUntil(item.timeUntilAiring ?: 0)
 
+                    val clickIntent = if (hasMoeList) {
+                        createMoeListIntent(item.anime.anime_id)
+                    } else {
+                        createMalWebIntent(item.anime.anime_id)
+                    }
+
                     Column(
                         modifier = GlanceModifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
+                            .clickable(actionStartActivity(clickIntent))
                     ) {
                         Text(
                             text = title,
@@ -229,6 +231,31 @@ class AnimeWidget : GlanceAppWidget() {
         }
     }
 
+    fun createMoeListIntent(animeId: Int): Intent {
+        return Intent().apply {
+            setClassName(
+                "com.axiel7.moelist",
+                "com.axiel7.moelist.ui.main.MainActivity"
+            )
+            action = "details"
+            putExtra("media_id", animeId)
+            putExtra("media_type", "anime")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addCategory(animeId.toString())
+        }
+    }
+
+    fun createMalWebIntent(animeId: Int): Intent {
+        return Intent(Intent.ACTION_VIEW).apply {
+            data = "https://myanimelist.net/anime/$animeId".toUri()
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+    }
+
+    fun isMoeListInstalled(context: Context): Boolean {
+        return context.packageManager.getLaunchIntentForPackage("com.axiel7.moelist") != null
+    }
 
     private fun formatTimeUntil(seconds: Int): String {
         if (seconds <= 0) return "Aired"
