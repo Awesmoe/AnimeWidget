@@ -13,36 +13,6 @@ data class MalAnime(
 )
 
 @Serializable
-data class AniListResponse(
-    val data: AniListData? = null
-)
-
-@Serializable
-data class AniListData(
-    val Media: AniListMediaSimple? = null
-)
-
-@Serializable
-data class AniListMediaSimple(
-    val id: Int? = null,
-    val title: AniListTitle? = null,
-    val nextAiringEpisode: AiringNode? = null,
-    val airingSchedule: AiringSchedule? = null,
-    val status: String? = null
-)
-
-@Serializable
-data class AiringSchedule(
-    val nodes: List<AiringNode> = emptyList()
-)
-
-@Serializable
-data class AniListTitle(
-    val romaji: String? = null,
-    val english: String? = null
-)
-
-@Serializable
 data class AiringNode(
     val episode: Int? = null,
     val airingAt: Long? = null,

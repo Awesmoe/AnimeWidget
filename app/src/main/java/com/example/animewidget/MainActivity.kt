@@ -45,15 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import getIncludePlanToWatch
-import getUseEnglishTitle
-import getUsername
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import saveIncludePlanToWatch
-import saveUseEnglishTitle
-import saveUsername
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,15 +80,15 @@ fun UsernameScreen() {
         try {
             val existing = getUsername(context).firstOrNull()
             if (!existing.isNullOrBlank()) username = existing
-        } catch (e: Exception) { }
+        } catch (_: Exception) { }
         try {
             val existingToggle = getUseEnglishTitle(context).firstOrNull()
             if (existingToggle != null) useEnglishTitle = existingToggle
-        } catch (e: Exception) { }
+        } catch (_: Exception) { }
         try {
             val existingPlanToWatch = getIncludePlanToWatch(context).firstOrNull()
             if (existingPlanToWatch != null) includePlanToWatch = existingPlanToWatch
-        } catch (e: Exception) { }
+        } catch (_: Exception) { }
         loaded = true
     }
 

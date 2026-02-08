@@ -21,14 +21,25 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import getIncludePlanToWatch
-import getUseEnglishTitle
-import getUsername
 import kotlinx.coroutines.flow.firstOrNull
 import androidx.glance.appwidget.action.actionStartActivity
 import android.content.Intent
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.core.net.toUri
 import androidx.glance.action.clickable
+import java.time.Instant
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.width
+import androidx.glance.ColorFilter
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.action.ActionParameters
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.layout.height
+import androidx.glance.layout.size
 
 data class AnimeWithSchedule(
     val anime: MalAnime,
@@ -41,7 +52,7 @@ private sealed class ContentState {
     data class Success(
         val animeList: List<AnimeWithSchedule>,
         val useEnglishTitle: Boolean,
-        val hasMoeList: Boolean  // Add this
+        val hasMoeList: Boolean
     ) : ContentState()
     data class Error(val message: String) : ContentState()
 }
@@ -85,16 +96,13 @@ class AnimeWidget : GlanceAppWidget() {
                 malFetcher.fetchAnimeByStatus(username, 1)
             }
 
-            // Filter airing anime first
             val airingAnime = animeList.filter { anime ->
                 anime.anime_airing_status == 1 || anime.anime_airing_status == 3
             }
 
-            // Batch fetch all schedules at once
             val malIds = airingAnime.map { it.anime_id }
             val schedules = aniListFetcher.getMultipleAiringSchedules(malIds)
 
-            // Combine anime with their schedules
             val animeWithSchedules = airingAnime.mapNotNull { anime ->
                 val schedule = schedules[anime.anime_id]
                 if (anime.anime_airing_status == 1 && schedule == null) {
@@ -111,21 +119,22 @@ class AnimeWidget : GlanceAppWidget() {
 
             val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
 
-            // Return success content
-            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)
+            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)  // Pass timestamp
 
         } catch (e: Exception) {
             Log.e("AnimeWidget", "Error loading widget data", e)
             e.printStackTrace()
-            // Return error content
             ContentState.Error(e.message ?: "Unknown error")
         }
 
-        // Single provideContent call based on state
         provideContent {
             GlanceTheme {
                 when (content) {
-                    is ContentState.Success -> WidgetContent(content.animeList, content.useEnglishTitle, content.hasMoeList)
+                    is ContentState.Success -> WidgetContent(
+                        content.animeList,
+                        content.useEnglishTitle,
+                        content.hasMoeList
+                    )
                     is ContentState.Error -> ErrorContent(content.message)
                 }
             }
@@ -174,7 +183,11 @@ class AnimeWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun WidgetContent(animeList: List<AnimeWithSchedule>, useEnglishTitle: Boolean, hasMoeList: Boolean) {
+    private fun WidgetContent(
+        animeList: List<AnimeWithSchedule>,
+        useEnglishTitle: Boolean,
+        hasMoeList: Boolean,
+    ) {
 
         if (animeList.isEmpty()) {
             Column(
@@ -227,7 +240,41 @@ class AnimeWidget : GlanceAppWidget() {
                         )
                     }
                 }
+
+                item {
+                    Spacer(modifier = GlanceModifier.height(8.dp))
+                    RefreshFooter()  // No parameter
+                }
             }
+        }
+    }
+
+    @Composable
+    private fun RefreshFooter() {
+        Row(
+            modifier = GlanceModifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp)
+                .clickable(actionRunCallback<RefreshCallback>()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Tap to refresh",
+                style = TextStyle(
+                    color = GlanceTheme.colors.onSurfaceVariant,
+                    fontSize = TextUnit(12f, TextUnitType.Sp)
+                )
+            )
+
+            Spacer(modifier = GlanceModifier.width(8.dp))
+
+            Image(
+                provider = ImageProvider(android.R.drawable.ic_popup_sync),
+                contentDescription = "Refresh",
+                modifier = GlanceModifier.size(16.dp),
+                colorFilter = ColorFilter.tint(GlanceTheme.colors.primary)
+            )
         }
     }
 
@@ -274,4 +321,15 @@ class AnimeWidget : GlanceAppWidget() {
 
 class AnimeWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = AnimeWidget()
+}
+
+class RefreshCallback : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        Log.d("AnimeWidget", "Manual refresh triggered")
+        AnimeWidget().update(context, glanceId)
+    }
 }
