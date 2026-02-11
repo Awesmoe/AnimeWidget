@@ -201,6 +201,8 @@ class AnimeWidget : GlanceAppWidget() {
                     text = "No airing anime",
                     style = TextStyle(color = GlanceTheme.colors.onSurface)
                 )
+                Spacer(modifier = GlanceModifier.height(16.dp))
+                RefreshFooter()
             }
         } else {
             LazyColumn(
@@ -243,7 +245,7 @@ class AnimeWidget : GlanceAppWidget() {
 
                 item {
                     Spacer(modifier = GlanceModifier.height(8.dp))
-                    RefreshFooter()  // No parameter
+                    RefreshFooter()
                 }
             }
         }
