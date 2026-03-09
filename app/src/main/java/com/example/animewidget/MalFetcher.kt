@@ -2,6 +2,7 @@ package com.example.animewidget
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -15,10 +16,13 @@ class MalFetcher(private val client: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun getAnimeList(username: String): List<MalAnime> = withContext(Dispatchers.IO) {
-        val watchingAnime = fetchAnimeByStatus(username, 1)
+        val watchingDeferred = async { fetchAnimeByStatus(username, 1) }
+        val planToWatchDeferred = async { fetchAnimeByStatus(username, 6) }
+
+        val watchingAnime = watchingDeferred.await()
         Log.d("MalFetcher", "Found ${watchingAnime.size} watching anime")
 
-        val planToWatch = fetchAnimeByStatus(username, 6)
+        val planToWatch = planToWatchDeferred.await()
         Log.d("MalFetcher", "Found ${planToWatch.size} plan to watch anime")
 
         val allAnime = watchingAnime + planToWatch

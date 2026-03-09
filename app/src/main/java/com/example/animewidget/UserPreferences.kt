@@ -52,14 +52,12 @@ fun getIncludePlanToWatch(context: Context): Flow<Boolean> =
 
 private const val CACHE_PREFS = "anime_widget_cache"
 private const val CACHE_KEY_DATA = "cached_anime_list"
-private const val CACHE_KEY_TIMESTAMP = "cached_timestamp"
 
 fun saveCachedAnimeList(context: Context, animeList: List<AnimeWithSchedule>) {
     val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
     val jsonStr = Json.encodeToString(animeList)
     prefs.edit()
         .putString(CACHE_KEY_DATA, jsonStr)
-        .putLong(CACHE_KEY_TIMESTAMP, System.currentTimeMillis())
         .apply()
 }
 

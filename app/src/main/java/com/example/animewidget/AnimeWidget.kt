@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.core.net.toUri
 import androidx.glance.action.clickable
-import java.time.Instant
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.layout.Row
@@ -89,9 +88,6 @@ class AnimeWidget : GlanceAppWidget() {
         val hasMoeList = isMoeListInstalled(context)
         val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
 
-        // Try to load cached data first, then fetch fresh data
-        val cachedList = getCachedAnimeList(context)
-
         val content = try {
             val includePlanToWatch = getIncludePlanToWatch(context).firstOrNull() ?: true
             val malFetcher = MalFetcher(httpClient)
@@ -133,7 +129,7 @@ class AnimeWidget : GlanceAppWidget() {
 
         } catch (e: Exception) {
             Log.w("AnimeWidget", "Network fetch failed, using cache", e)
-            // Fall back to cached data if available
+            val cachedList = getCachedAnimeList(context)
             if (cachedList != null) {
                 ContentState.Success(cachedList, useEnglishTitle, hasMoeList)
             } else {

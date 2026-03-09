@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -73,7 +74,7 @@ class AniListFetcher(private val client: OkHttpClient) {
                     val nodes = animeData
                         ?.get("airingSchedule")?.jsonObject
                         ?.get("nodes")?.let { nodesElement ->
-                            json.decodeFromString<List<AiringNode>>(nodesElement.toString())
+                            json.decodeFromJsonElement<List<AiringNode>>(nodesElement)
                         }
 
                     if (nodes != null && nodes.isNotEmpty()) {
