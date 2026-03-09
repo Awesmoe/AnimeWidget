@@ -8,79 +8,50 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
+import java.io.IOException
+import java.net.URLEncoder
 
-class MalFetcher {
-    private val client = OkHttpClient()
+class MalFetcher(private val client: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun getAnimeList(username: String): List<MalAnime> = withContext(Dispatchers.IO) {
-        try {
-            val allAnime = mutableListOf<MalAnime>()
+        val watchingAnime = fetchAnimeByStatus(username, 1)
+        Log.d("MalFetcher", "Found ${watchingAnime.size} watching anime")
 
-            // Fetch watching (status=1)
-            val watchingAnime = fetchAnimeByStatus(username, 1)
-            allAnime.addAll(watchingAnime)
-            Log.d("MalFetcher", "Found ${watchingAnime.size} watching anime")
+        val planToWatch = fetchAnimeByStatus(username, 6)
+        Log.d("MalFetcher", "Found ${planToWatch.size} plan to watch anime")
 
-            // Fetch plan to watch (status=6)
-            val planToWatch = fetchAnimeByStatus(username, 6)
-            allAnime.addAll(planToWatch)
-            Log.d("MalFetcher", "Found ${planToWatch.size} plan to watch anime")
-
-            Log.d("MalFetcher", "Total anime: ${allAnime.size}")
-            return@withContext allAnime
-
-        } catch (e: Exception) {
-            Log.e("MalFetcher", "Error fetching MAL data", e)
-            return@withContext emptyList()
-        }
+        val allAnime = watchingAnime + planToWatch
+        Log.d("MalFetcher", "Total anime: ${allAnime.size}")
+        allAnime
     }
 
     suspend fun fetchAnimeByStatus(username: String, status: Int): List<MalAnime> = withContext(Dispatchers.IO) {
-        try {
-            val url = "https://myanimelist.net/animelist/$username?status=$status"
-            Log.d("Fetcher", url)
-            val request = Request.Builder()
-                .url(url)
-                .build()
+        val encodedUsername = URLEncoder.encode(username, "UTF-8")
+        val url = "https://myanimelist.net/animelist/$encodedUsername?status=$status"
+        Log.d("Fetcher", url)
+        val request = Request.Builder().url(url).build()
 
-            val response = client.newCall(request).execute()
-
+        val html = client.newCall(request).execute().use { response ->
             Log.d("MalFetcher", "Response code for status $status: ${response.code}")
-
             if (!response.isSuccessful) {
-                Log.e("MalFetcher", "HTTP Error: ${response.code}")
-                return@withContext emptyList()
+                throw IOException("HTTP ${response.code} fetching MAL list (status=$status)")
             }
+            response.body?.string()
+        } ?: throw IOException("Empty response body for status $status")
 
-            val html = response.body?.string() ?: return@withContext emptyList()
+        Log.d("MalFetcher", "HTML length for status $status: ${html.length}")
 
-            Log.d("MalFetcher", "HTML length for status $status: ${html.length}")
+        val doc = Jsoup.parse(html, Parser.htmlParser())
+        val listTable = doc.select("table.list-table").first()
+            ?: throw IOException("Could not find list table for status $status")
 
-            // Parse HTML to find the data-items attribute
-            val doc = Jsoup.parse(html, Parser.htmlParser())
-            val listTable = doc.select("table.list-table").first()
-
-            if (listTable == null) {
-                Log.e("MalFetcher", "Could not find list table for status $status")
-                return@withContext emptyList()
-            }
-
-            val dataItems = listTable.attr("data-items")
-
-            if (dataItems.isEmpty()) {
-                Log.e("MalFetcher", "data-items attribute is empty for status $status")
-                return@withContext emptyList()
-            }
-
-            // Parse JSON
-            val animeList = json.decodeFromString<List<MalAnime>>(dataItems)
-
-            return@withContext animeList
-
-        } catch (e: Exception) {
-            Log.e("MalFetcher", "Error fetching status $status", e)
+        val dataItems = listTable.attr("data-items")
+        if (dataItems.isEmpty()) {
+            Log.e("MalFetcher", "data-items attribute is empty for status $status")
             return@withContext emptyList()
         }
+
+        json.decodeFromString<List<MalAnime>>(dataItems)
     }
 }

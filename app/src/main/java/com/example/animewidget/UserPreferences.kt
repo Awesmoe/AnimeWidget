@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 
 val Context.dataStore by preferencesDataStore(name = "user_prefs")
 val USERNAME_KEY = stringPreferencesKey("mal_username")
@@ -47,3 +49,26 @@ fun getIncludePlanToWatch(context: Context): Flow<Boolean> =
     context.dataStore.data.map { prefs ->
         prefs[INCLUDE_PLAN_TO_WATCH] ?: true // default to true (include plan to watch)
     }
+
+private const val CACHE_PREFS = "anime_widget_cache"
+private const val CACHE_KEY_DATA = "cached_anime_list"
+private const val CACHE_KEY_TIMESTAMP = "cached_timestamp"
+
+fun saveCachedAnimeList(context: Context, animeList: List<AnimeWithSchedule>) {
+    val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
+    val jsonStr = Json.encodeToString(animeList)
+    prefs.edit()
+        .putString(CACHE_KEY_DATA, jsonStr)
+        .putLong(CACHE_KEY_TIMESTAMP, System.currentTimeMillis())
+        .apply()
+}
+
+fun getCachedAnimeList(context: Context): List<AnimeWithSchedule>? {
+    val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
+    val jsonStr = prefs.getString(CACHE_KEY_DATA, null) ?: return null
+    return try {
+        Json.decodeFromString<List<AnimeWithSchedule>>(jsonStr)
+    } catch (e: Exception) {
+        null
+    }
+}

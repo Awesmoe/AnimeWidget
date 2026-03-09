@@ -12,17 +12,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-class AniListFetcher {
-    private val client = OkHttpClient()
+class AniListFetcher(private val client: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    /* Original single-fetch method
-    suspend fun getAiringSchedule(malId: Int): AiringNode? = withContext(Dispatchers.IO) {
-        val results = getMultipleAiringSchedules(listOf(malId))
-        return@withContext results[malId]
-    }
-*/
-    // New batched method
+    // batched api call
     suspend fun getMultipleAiringSchedules(malIds: List<Int>): Map<Int, AiringNode?> = withContext(Dispatchers.IO) {
         if (malIds.isEmpty()) return@withContext emptyMap()
 
@@ -61,14 +54,14 @@ class AniListFetcher {
                 .addHeader("Accept", "application/json")
                 .build()
 
-            val response = client.newCall(request).execute()
-
-            if (!response.isSuccessful) {
-                Log.e("AniListFetcher", "HTTP Error: ${response.code}")
-                return@withContext malIds.associateWith { null }
-            }
-
-            val responseBody = response.body?.string() ?: return@withContext malIds.associateWith { null }
+            val responseBody = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e("AniListFetcher", "HTTP Error: ${response.code}")
+                    null
+                } else {
+                    response.body?.string()
+                }
+            } ?: return@withContext malIds.associateWith { null }
             val jsonResponse = json.parseToJsonElement(responseBody).jsonObject
             val data = jsonResponse["data"]?.jsonObject ?: return@withContext malIds.associateWith { null }
 

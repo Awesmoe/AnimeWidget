@@ -40,7 +40,11 @@ import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.layout.height
 import androidx.glance.layout.size
+import okhttp3.OkHttpClient
 
+private val httpClient = OkHttpClient()
+
+@kotlinx.serialization.Serializable
 data class AnimeWithSchedule(
     val anime: MalAnime,
     val episode: Int?,
@@ -83,12 +87,15 @@ class AnimeWidget : GlanceAppWidget() {
         }
 
         val hasMoeList = isMoeListInstalled(context)
+        val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
+
+        // Try to load cached data first, then fetch fresh data
+        val cachedList = getCachedAnimeList(context)
 
         val content = try {
-            val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
             val includePlanToWatch = getIncludePlanToWatch(context).firstOrNull() ?: true
-            val malFetcher = MalFetcher()
-            val aniListFetcher = AniListFetcher()
+            val malFetcher = MalFetcher(httpClient)
+            val aniListFetcher = AniListFetcher(httpClient)
 
             val animeList = if (includePlanToWatch) {
                 malFetcher.getAnimeList(username)
@@ -119,12 +126,19 @@ class AnimeWidget : GlanceAppWidget() {
 
             val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
 
-            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)  // Pass timestamp
+            // Cache the fresh result
+            saveCachedAnimeList(context, sortedAnime)
+
+            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)
 
         } catch (e: Exception) {
-            Log.e("AnimeWidget", "Error loading widget data", e)
-            e.printStackTrace()
-            ContentState.Error(e.message ?: "Unknown error")
+            Log.w("AnimeWidget", "Network fetch failed, using cache", e)
+            // Fall back to cached data if available
+            if (cachedList != null) {
+                ContentState.Success(cachedList, useEnglishTitle, hasMoeList)
+            } else {
+                ContentState.Error(e.message ?: "Unknown error")
+            }
         }
 
         provideContent {

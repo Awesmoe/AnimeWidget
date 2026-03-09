@@ -143,10 +143,7 @@ fun UsernameScreen() {
                             placeholder = { Text("Enter your MAL username") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
- /*                           supportingText = {
-                                Text("This is used to fetch your anime list")
-                            }
-   */                     )
+                        )
                     }
                 }
 
