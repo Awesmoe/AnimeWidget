@@ -1,6 +1,7 @@
 # AnimeWidget
 
 A simple Android home screen widget that shows your upcoming anime episodes.
+Mimics MoeList widget and adds some functionality.
 
 Pulls your **Currently Watching** and **Plan to Watch** lists from [MyAnimeList](https://myanimelist.net), then fetches airing schedules from [AniList](https://anilist.co) to show what's airing next and when.
 
