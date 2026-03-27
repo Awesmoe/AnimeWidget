@@ -1,4 +1,4 @@
-package com.example.animewidget.ui.theme
+package com.awesmoe.animewidget.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

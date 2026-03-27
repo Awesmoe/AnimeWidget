@@ -1,6 +1,7 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -67,6 +68,7 @@ fun getCachedAnimeList(context: Context): List<AnimeWithSchedule>? {
     return try {
         Json.decodeFromString<List<AnimeWithSchedule>>(jsonStr)
     } catch (e: Exception) {
+        Log.e("UserPreferences", "Failed to decode cached anime list", e)
         null
     }
 }

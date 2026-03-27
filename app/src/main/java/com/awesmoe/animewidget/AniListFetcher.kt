@@ -1,4 +1,4 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -13,15 +13,14 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
-class AniListFetcher(private val client: OkHttpClient) {
-    private val json = Json { ignoreUnknownKeys = true }
+internal val sharedJson = Json { ignoreUnknownKeys = true }
 
-    // batched api call
+class AniListFetcher(private val client: OkHttpClient) {
+
     suspend fun getMultipleAiringSchedules(malIds: List<Int>): Map<Int, AiringNode?> = withContext(Dispatchers.IO) {
         if (malIds.isEmpty()) return@withContext emptyMap()
 
         try {
-            // Build individual queries for each MAL ID
             val queries = malIds.mapIndexed { index, malId ->
                 """
                 anime$index: Media(idMal: $malId, type: ANIME) {
@@ -63,10 +62,9 @@ class AniListFetcher(private val client: OkHttpClient) {
                     response.body?.string()
                 }
             } ?: return@withContext malIds.associateWith { null }
-            val jsonResponse = json.parseToJsonElement(responseBody).jsonObject
+            val jsonResponse = sharedJson.parseToJsonElement(responseBody).jsonObject
             val data = jsonResponse["data"]?.jsonObject ?: return@withContext malIds.associateWith { null }
 
-            // Parse results for each anime
             val results = mutableMapOf<Int, AiringNode?>()
             malIds.forEachIndexed { index, malId ->
                 try {
@@ -74,7 +72,7 @@ class AniListFetcher(private val client: OkHttpClient) {
                     val nodes = animeData
                         ?.get("airingSchedule")?.jsonObject
                         ?.get("nodes")?.let { nodesElement ->
-                            json.decodeFromJsonElement<List<AiringNode>>(nodesElement)
+                            sharedJson.decodeFromJsonElement<List<AiringNode>>(nodesElement)
                         }
 
                     if (nodes != null && nodes.isNotEmpty()) {

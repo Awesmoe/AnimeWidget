@@ -1,10 +1,9 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -13,7 +12,6 @@ import java.io.IOException
 import java.net.URLEncoder
 
 class MalFetcher(private val client: OkHttpClient) {
-    private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun getAnimeList(username: String): List<MalAnime> = withContext(Dispatchers.IO) {
         val watchingDeferred = async { fetchAnimeByStatus(username, 1) }
@@ -56,6 +54,6 @@ class MalFetcher(private val client: OkHttpClient) {
             return@withContext emptyList()
         }
 
-        json.decodeFromString<List<MalAnime>>(dataItems)
+        sharedJson.decodeFromString<List<MalAnime>>(dataItems)
     }
 }

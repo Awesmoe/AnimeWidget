@@ -1,4 +1,4 @@
-package com.example.animewidget.ui.theme
+package com.awesmoe.animewidget.ui.theme
 
 import android.app.Activity
 import android.os.Build

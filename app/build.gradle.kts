@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.animewidget"
+    namespace = "com.awesmoe.animewidget"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.animewidget"
+        applicationId = "com.awesmoe.animewidget"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

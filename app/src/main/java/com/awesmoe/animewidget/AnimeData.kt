@@ -1,4 +1,4 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import kotlinx.serialization.Serializable
 

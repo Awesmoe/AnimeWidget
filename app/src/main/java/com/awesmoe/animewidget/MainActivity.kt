@@ -1,4 +1,4 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager

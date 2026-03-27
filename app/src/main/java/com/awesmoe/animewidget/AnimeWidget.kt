@@ -1,4 +1,4 @@
-package com.example.animewidget
+package com.awesmoe.animewidget
 
 import android.content.Context
 import android.util.Log
@@ -62,7 +62,6 @@ private sealed class ContentState {
 
 class AnimeWidget : GlanceAppWidget() {
 
- //   override val sizeMode = SizeMode.Single
     override val sizeMode = SizeMode.Responsive(
         setOf(
             DpSize(120.dp, 120.dp),
