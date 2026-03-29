@@ -2,6 +2,7 @@ package com.awesmoe.animewidget
 
 import android.content.Context
 import android.util.Log
+import java.io.IOException
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -55,7 +56,8 @@ private sealed class ContentState {
     data class Success(
         val animeList: List<AnimeWithSchedule>,
         val useEnglishTitle: Boolean,
-        val hasMoeList: Boolean
+        val hasMoeList: Boolean,
+        val aniListError: String? = null
     ) : ContentState()
     data class Error(val message: String) : ContentState()
 }
@@ -103,14 +105,29 @@ class AnimeWidget : GlanceAppWidget() {
             }
 
             val malIds = airingAnime.map { it.anime_id }
-            val schedules = aniListFetcher.getMultipleAiringSchedules(malIds)
+            var aniListError: String? = null
+            val schedules = try {
+                aniListFetcher.getMultipleAiringSchedules(malIds)
+            } catch (e: IOException) {
+                aniListError = e.message
+                malIds.associateWith { null }
+            }
 
-            val animeWithSchedules = airingAnime.mapNotNull { anime ->
-                val schedule = schedules[anime.anime_id]
-                if (anime.anime_airing_status == 1 && schedule == null) {
-                    null
-                } else {
+            val animeWithSchedules = if (aniListError != null) {
+                airingAnime.map { anime ->
+                    val schedule = schedules[anime.anime_id]
                     AnimeWithSchedule(
+                        anime = anime,
+                        episode = schedule?.episode,
+                        airingAt = schedule?.airingAt,
+                        timeUntilAiring = schedule?.timeUntilAiring
+                    )
+                }
+            } else {
+                airingAnime.mapNotNull { anime ->
+                    val schedule = schedules[anime.anime_id]
+                    if (anime.anime_airing_status == 1 && schedule == null) null
+                    else AnimeWithSchedule(
                         anime = anime,
                         episode = schedule?.episode,
                         airingAt = schedule?.airingAt,
@@ -124,7 +141,7 @@ class AnimeWidget : GlanceAppWidget() {
             // Cache the fresh result
             saveCachedAnimeList(context, sortedAnime)
 
-            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList)
+            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList, aniListError)
 
         } catch (e: Exception) {
             Log.w("AnimeWidget", "Network fetch failed, using cache", e)
@@ -142,7 +159,8 @@ class AnimeWidget : GlanceAppWidget() {
                     is ContentState.Success -> WidgetContent(
                         content.animeList,
                         content.useEnglishTitle,
-                        content.hasMoeList
+                        content.hasMoeList,
+                        content.aniListError
                     )
                     is ContentState.Error -> ErrorContent(content.message)
                 }
@@ -192,10 +210,23 @@ class AnimeWidget : GlanceAppWidget() {
     }
 
     @Composable
+    private fun AniListErrorBanner(error: String) {
+        Text(
+            text = "AniList: $error",
+            style = TextStyle(
+                color = GlanceTheme.colors.error,
+                fontSize = TextUnit(11f, TextUnitType.Sp)
+            ),
+            maxLines = 2,
+        )
+    }
+
+    @Composable
     private fun WidgetContent(
         animeList: List<AnimeWithSchedule>,
         useEnglishTitle: Boolean,
         hasMoeList: Boolean,
+        aniListError: String? = null,
     ) {
 
         if (animeList.isEmpty()) {
@@ -206,10 +237,14 @@ class AnimeWidget : GlanceAppWidget() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "No airing anime",
-                    style = TextStyle(color = GlanceTheme.colors.onSurface)
-                )
+                if (aniListError != null) {
+                    AniListErrorBanner(aniListError)
+                } else {
+                    Text(
+                        text = "No airing anime",
+                        style = TextStyle(color = GlanceTheme.colors.onSurface)
+                    )
+                }
                 Spacer(modifier = GlanceModifier.height(16.dp))
                 RefreshFooter()
             }
@@ -219,6 +254,12 @@ class AnimeWidget : GlanceAppWidget() {
                     .fillMaxSize()
                     .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
+                if (aniListError != null) {
+                    item {
+                        AniListErrorBanner(aniListError)
+                        Spacer(modifier = GlanceModifier.height(8.dp))
+                    }
+                }
                 items(animeList) { item ->
                     val title = if (useEnglishTitle) {
                         item.anime.anime_title_eng?.takeIf { it.isNotBlank() } ?: item.anime.anime_title

@@ -7,7 +7,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -57,13 +61,18 @@ class AniListFetcher(private val client: OkHttpClient) {
             val responseBody = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     Log.e("AniListFetcher", "HTTP Error: ${response.code}")
-                    null
-                } else {
-                    response.body?.string()
                 }
+                response.body?.string()
             } ?: return@withContext malIds.associateWith { null }
             val jsonResponse = sharedJson.parseToJsonElement(responseBody).jsonObject
-            val data = jsonResponse["data"]?.jsonObject ?: return@withContext malIds.associateWith { null }
+            val data = jsonResponse["data"] as? JsonObject
+            if (data == null) {
+                val errorMessage = jsonResponse["errors"]
+                    ?.jsonArray?.firstOrNull()?.jsonObject
+                    ?.get("message")?.jsonPrimitive?.content
+                    ?: "AniList returned no data"
+                throw IOException(errorMessage)
+            }
 
             val results = mutableMapOf<Int, AiringNode?>()
             malIds.forEachIndexed { index, malId ->
@@ -90,6 +99,8 @@ class AniListFetcher(private val client: OkHttpClient) {
 
             return@withContext results
 
+        } catch (e: IOException) {
+            throw e
         } catch (e: Exception) {
             Log.e("AniListFetcher", "Error fetching batch AniList data", e)
             return@withContext malIds.associateWith { null }
