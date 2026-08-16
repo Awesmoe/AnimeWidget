@@ -50,8 +50,7 @@ class MalFetcher(private val client: OkHttpClient) {
 
         val dataItems = listTable.attr("data-items")
         if (dataItems.isEmpty()) {
-            Log.e("MalFetcher", "data-items attribute is empty for status $status")
-            return@withContext emptyList()
+            throw IOException("data-items attribute is empty for status $status (possible anti-bot or transient MAL issue)")
         }
 
         sharedJson.decodeFromString<List<MalAnime>>(dataItems)

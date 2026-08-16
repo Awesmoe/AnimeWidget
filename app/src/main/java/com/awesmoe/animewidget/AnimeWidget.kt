@@ -139,13 +139,13 @@ class AnimeWidget : GlanceAppWidget() {
             val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
 
             // Cache the fresh result
-            saveCachedAnimeList(context, sortedAnime)
+            saveCachedAnimeList(context, username, sortedAnime)
 
             ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList, aniListError)
 
         } catch (e: Exception) {
             Log.w("AnimeWidget", "Network fetch failed, using cache", e)
-            val cachedList = getCachedAnimeList(context)
+            val cachedList = getCachedAnimeList(context, username)
             if (cachedList != null) {
                 ContentState.Success(cachedList, useEnglishTitle, hasMoeList)
             } else {
@@ -286,7 +286,7 @@ class AnimeWidget : GlanceAppWidget() {
                             maxLines = 1
                         )
                         Text(
-                            text = "Ep ${item.episode ?: "-"} (${item.anime.num_watched_episodes}) - $timeStr",
+                            text = "Ep ${item.episode ?: "-"} (${item.anime.num_watched_episodes ?: "?"}) - $timeStr",
                             style = TextStyle(color = GlanceTheme.colors.onTertiaryContainer),
                             maxLines = 1
                         )

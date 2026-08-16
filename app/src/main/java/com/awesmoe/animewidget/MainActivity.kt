@@ -1,11 +1,16 @@
 package com.awesmoe.animewidget
 
+import android.Manifest
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -73,7 +79,11 @@ fun UsernameScreen() {
     var loaded by remember { mutableStateOf(false) }
     var useEnglishTitle by remember { mutableStateOf(true) }
     var includePlanToWatch by remember { mutableStateOf(true) }
+    var airingNotificationsEnabled by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
 
     // Load saved preferences
     LaunchedEffect(Unit) {
@@ -88,6 +98,12 @@ fun UsernameScreen() {
         try {
             val existingPlanToWatch = getIncludePlanToWatch(context).firstOrNull()
             if (existingPlanToWatch != null) includePlanToWatch = existingPlanToWatch
+        } catch (_: Exception) { }
+        try {
+            val existingNotificationSetting = getAiringNotificationsEnabled(context).firstOrNull()
+            if (existingNotificationSetting != null) {
+                airingNotificationsEnabled = existingNotificationSetting
+            }
         } catch (_: Exception) { }
         loaded = true
     }
@@ -189,6 +205,61 @@ fun UsernameScreen() {
                     }
                 }
 
+                // Notifications Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Notifications",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Airing Alerts",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "Notify when a tracked episode has aired",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = airingNotificationsEnabled,
+                                onCheckedChange = { enabled ->
+                                    airingNotificationsEnabled = enabled
+                                    if (
+                                        enabled &&
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            Manifest.permission.POST_NOTIFICATIONS
+                                        ) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        notificationPermissionLauncher.launch(
+                                            Manifest.permission.POST_NOTIFICATIONS
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
                 // List Selection Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -265,9 +336,14 @@ fun UsernameScreen() {
                         isSaving = true
                         Log.d("MainActivity", "Starting save...")
 
-                        saveUsername(context, username)
+                        val trimmedUsername = username.trim()
+                        clearAnimeCache(context)
+                        clearAiringNotificationStates(context)
+                        saveUsername(context, trimmedUsername)
                         saveUseEnglishTitle(context, useEnglishTitle)
                         saveIncludePlanToWatch(context, includePlanToWatch)
+                        saveAiringNotificationsEnabled(context, airingNotificationsEnabled)
+                        syncAiringNotificationWork(context)
 
                         Log.d("MainActivity", "Settings saved, updating widget...")
 
