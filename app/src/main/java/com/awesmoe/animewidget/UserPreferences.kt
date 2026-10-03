@@ -8,8 +8,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 val Context.dataStore by preferencesDataStore(name = "user_prefs")
 val USERNAME_KEY = stringPreferencesKey("mal_username")
@@ -64,10 +64,10 @@ fun getAiringNotificationsEnabled(context: Context): Flow<Boolean> =
     }
 
 private const val CACHE_PREFS = "anime_widget_cache"
-private const val CACHE_KEY_PREFIX = "cached_anime_list_"
+private const val WIDGET_STATE_KEY_PREFIX = "cached_widget_state_"
 private const val NOTIFICATION_STATE_KEY_PREFIX = "airing_notification_state_"
 
-private fun cacheKeyFor(username: String) = "$CACHE_KEY_PREFIX${username.lowercase()}"
+private fun widgetStateKeyFor(username: String) = "$WIDGET_STATE_KEY_PREFIX${username.lowercase()}"
 private fun notificationStateKeyFor(username: String) =
     "$NOTIFICATION_STATE_KEY_PREFIX${username.lowercase()}"
 
@@ -79,21 +79,21 @@ data class AiringNotificationState(
     val airingAt: Long? = null
 )
 
-fun saveCachedAnimeList(context: Context, username: String, animeList: List<AnimeWithSchedule>) {
+fun saveCachedWidgetState(context: Context, username: String, state: CachedWidgetState) {
     val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
-    val jsonStr = Json.encodeToString(animeList)
+    val jsonStr = Json.encodeToString(state)
     prefs.edit()
-        .putString(cacheKeyFor(username), jsonStr)
+        .putString(widgetStateKeyFor(username), jsonStr)
         .apply()
 }
 
-fun getCachedAnimeList(context: Context, username: String): List<AnimeWithSchedule>? {
+fun getCachedWidgetState(context: Context, username: String): CachedWidgetState? {
     val prefs = context.getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
-    val jsonStr = prefs.getString(cacheKeyFor(username), null) ?: return null
+    val jsonStr = prefs.getString(widgetStateKeyFor(username), null) ?: return null
     return try {
-        Json.decodeFromString<List<AnimeWithSchedule>>(jsonStr)
+        Json.decodeFromString<CachedWidgetState>(jsonStr)
     } catch (e: Exception) {
-        Log.e("UserPreferences", "Failed to decode cached anime list", e)
+        Log.e("UserPreferences", "Failed to decode cached widget state", e)
         null
     }
 }

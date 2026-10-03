@@ -2,65 +2,41 @@ package com.awesmoe.animewidget
 
 import android.content.Context
 import android.util.Log
-import java.io.IOException
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import kotlinx.coroutines.flow.firstOrNull
-import androidx.glance.appwidget.action.actionStartActivity
-import android.content.Intent
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
-import androidx.core.net.toUri
-import androidx.glance.action.clickable
-import androidx.glance.Image
-import androidx.glance.ImageProvider
-import androidx.glance.layout.Row
-import androidx.glance.layout.Spacer
-import androidx.glance.layout.width
-import androidx.glance.ColorFilter
-import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.action.ActionParameters
-import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.layout.height
-import androidx.glance.layout.size
-import okhttp3.OkHttpClient
-
-private val httpClient = OkHttpClient()
-
-@kotlinx.serialization.Serializable
-data class AnimeWithSchedule(
-    val anime: MalAnime,
-    val episode: Int?,
-    val airingAt: Long?,
-    val timeUntilAiring: Int?
-)
-
-private sealed class ContentState {
-    data class Success(
-        val animeList: List<AnimeWithSchedule>,
-        val useEnglishTitle: Boolean,
-        val hasMoeList: Boolean,
-        val aniListError: String? = null
-    ) : ContentState()
-    data class Error(val message: String) : ContentState()
-}
 
 class AnimeWidget : GlanceAppWidget() {
 
@@ -72,9 +48,7 @@ class AnimeWidget : GlanceAppWidget() {
         )
     )
 
-
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-
         val username = getUsername(context).firstOrNull()
 
         if (username.isNullOrBlank()) {
@@ -88,82 +62,29 @@ class AnimeWidget : GlanceAppWidget() {
 
         val hasMoeList = isMoeListInstalled(context)
         val useEnglishTitle = getUseEnglishTitle(context).firstOrNull() ?: true
+        val state = getCachedWidgetState(context, username)
 
-        val content = try {
-            val includePlanToWatch = getIncludePlanToWatch(context).firstOrNull() ?: true
-            val malFetcher = MalFetcher(httpClient)
-            val aniListFetcher = AniListFetcher(httpClient)
-
-            val animeList = if (includePlanToWatch) {
-                malFetcher.getAnimeList(username)
-            } else {
-                malFetcher.fetchAnimeByStatus(username, 1)
-            }
-
-            val airingAnime = animeList.filter { anime ->
-                anime.anime_airing_status == 1 || anime.anime_airing_status == 3
-            }
-
-            val malIds = airingAnime.map { it.anime_id }
-            var aniListError: String? = null
-            val schedules = try {
-                aniListFetcher.getMultipleAiringSchedules(malIds)
-            } catch (e: IOException) {
-                aniListError = e.message
-                malIds.associateWith { null }
-            }
-
-            val animeWithSchedules = if (aniListError != null) {
-                airingAnime.map { anime ->
-                    val schedule = schedules[anime.anime_id]
-                    AnimeWithSchedule(
-                        anime = anime,
-                        episode = schedule?.episode,
-                        airingAt = schedule?.airingAt,
-                        timeUntilAiring = schedule?.timeUntilAiring
-                    )
-                }
-            } else {
-                airingAnime.mapNotNull { anime ->
-                    val schedule = schedules[anime.anime_id]
-                    if (anime.anime_airing_status == 1 && schedule == null) null
-                    else AnimeWithSchedule(
-                        anime = anime,
-                        episode = schedule?.episode,
-                        airingAt = schedule?.airingAt,
-                        timeUntilAiring = schedule?.timeUntilAiring
-                    )
+        if (state == null) {
+            // No cached data yet — kick off a fetch and show a loading state.
+            // The worker calls updateAll() when it finishes.
+            enqueueOneTimeRefresh(context)
+            provideContent {
+                GlanceTheme {
+                    LoadingContent()
                 }
             }
-
-            val sortedAnime = animeWithSchedules.sortedBy { it.airingAt ?: Long.MAX_VALUE }
-
-            // Cache the fresh result
-            saveCachedAnimeList(context, username, sortedAnime)
-
-            ContentState.Success(sortedAnime, useEnglishTitle, hasMoeList, aniListError)
-
-        } catch (e: Exception) {
-            Log.w("AnimeWidget", "Network fetch failed, using cache", e)
-            val cachedList = getCachedAnimeList(context, username)
-            if (cachedList != null) {
-                ContentState.Success(cachedList, useEnglishTitle, hasMoeList)
-            } else {
-                ContentState.Error(e.message ?: "Unknown error")
-            }
+            return
         }
 
         provideContent {
             GlanceTheme {
-                when (content) {
-                    is ContentState.Success -> WidgetContent(
-                        content.animeList,
-                        content.useEnglishTitle,
-                        content.hasMoeList,
-                        content.aniListError
-                    )
-                    is ContentState.Error -> ErrorContent(content.message)
-                }
+                WidgetContent(
+                    animeList = state.animeList,
+                    useEnglishTitle = useEnglishTitle,
+                    hasMoeList = hasMoeList,
+                    aniListError = state.aniListError,
+                    lastUpdated = state.lastUpdated
+                )
             }
         }
     }
@@ -189,7 +110,7 @@ class AnimeWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun ErrorContent(message: String) {
+    private fun LoadingContent() {
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -198,13 +119,8 @@ class AnimeWidget : GlanceAppWidget() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Error",
-                style = TextStyle(color = GlanceTheme.colors.error)
-            )
-            Text(
-                text = message,
-                style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant),
-                maxLines = 3
+                text = "Loading\u2026",
+                style = TextStyle(color = GlanceTheme.colors.onSurface)
             )
         }
     }
@@ -227,6 +143,7 @@ class AnimeWidget : GlanceAppWidget() {
         useEnglishTitle: Boolean,
         hasMoeList: Boolean,
         aniListError: String? = null,
+        lastUpdated: Long = 0L,
     ) {
 
         if (animeList.isEmpty()) {
@@ -246,7 +163,7 @@ class AnimeWidget : GlanceAppWidget() {
                     )
                 }
                 Spacer(modifier = GlanceModifier.height(16.dp))
-                RefreshFooter()
+                RefreshFooter(lastUpdated)
             }
         } else {
             LazyColumn(
@@ -295,14 +212,14 @@ class AnimeWidget : GlanceAppWidget() {
 
                 item {
                     Spacer(modifier = GlanceModifier.height(8.dp))
-                    RefreshFooter()
+                    RefreshFooter(lastUpdated)
                 }
             }
         }
     }
 
     @Composable
-    private fun RefreshFooter() {
+    private fun RefreshFooter(lastUpdated: Long = 0L) {
         Row(
             modifier = GlanceModifier
                 .fillMaxWidth()
@@ -327,33 +244,18 @@ class AnimeWidget : GlanceAppWidget() {
                 modifier = GlanceModifier.size(16.dp),
                 colorFilter = ColorFilter.tint(GlanceTheme.colors.primary)
             )
-        }
-    }
 
-    fun createMoeListIntent(animeId: Int): Intent {
-        return Intent().apply {
-            setClassName(
-                "com.axiel7.moelist",
-                "com.axiel7.moelist.ui.main.MainActivity"
-            )
-            action = "details"
-            putExtra("media_id", animeId)
-            putExtra("media_type", "anime")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            addCategory(animeId.toString())
+            if (lastUpdated > 0) {
+                Spacer(modifier = GlanceModifier.width(8.dp))
+                Text(
+                    text = formatLastUpdated(lastUpdated),
+                    style = TextStyle(
+                        color = GlanceTheme.colors.onSurfaceVariant,
+                        fontSize = TextUnit(11f, TextUnitType.Sp)
+                    )
+                )
+            }
         }
-    }
-
-    fun createMalWebIntent(animeId: Int): Intent {
-        return Intent(Intent.ACTION_VIEW).apply {
-            data = "https://myanimelist.net/anime/$animeId".toUri()
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    }
-
-    fun isMoeListInstalled(context: Context): Boolean {
-        return context.packageManager.getLaunchIntentForPackage("com.axiel7.moelist") != null
     }
 
     private fun formatTimeUntil(seconds: Int): String {
@@ -369,6 +271,17 @@ class AnimeWidget : GlanceAppWidget() {
             else -> "${minutes}m"
         }
     }
+
+    private fun formatLastUpdated(millis: Long): String {
+        if (millis <= 0) return ""
+        val minutes = (System.currentTimeMillis() - millis) / 60_000
+        return when {
+            minutes < 1 -> "Updated just now"
+            minutes < 60 -> "Updated ${minutes}m ago"
+            minutes < 1440 -> "Updated ${minutes / 60}h ago"
+            else -> "Updated ${minutes / 1440}d ago"
+        }
+    }
 }
 
 class AnimeWidgetReceiver : GlanceAppWidgetReceiver() {
@@ -382,6 +295,6 @@ class RefreshCallback : ActionCallback {
         parameters: ActionParameters
     ) {
         Log.d("AnimeWidget", "Manual refresh triggered")
-        AnimeWidget().update(context, glanceId)
+        enqueueOneTimeRefresh(context)
     }
 }

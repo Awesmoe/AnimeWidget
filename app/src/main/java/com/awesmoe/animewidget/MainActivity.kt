@@ -343,7 +343,7 @@ fun UsernameScreen() {
                         saveUseEnglishTitle(context, useEnglishTitle)
                         saveIncludePlanToWatch(context, includePlanToWatch)
                         saveAiringNotificationsEnabled(context, airingNotificationsEnabled)
-                        syncAiringNotificationWork(context)
+                        syncRefreshWork(context)
 
                         Log.d("MainActivity", "Settings saved, updating widget...")
 

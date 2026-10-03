@@ -18,3 +18,18 @@ data class AiringNode(
     val airingAt: Long? = null,
     val timeUntilAiring: Int? = null
 )
+
+@Serializable
+data class AnimeWithSchedule(
+    val anime: MalAnime,
+    val episode: Int?,
+    val airingAt: Long?,
+    val timeUntilAiring: Int?
+)
+
+@Serializable
+data class CachedWidgetState(
+    val animeList: List<AnimeWithSchedule> = emptyList(),
+    val aniListError: String? = null,
+    val lastUpdated: Long = 0L
+)
